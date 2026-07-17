@@ -66,7 +66,7 @@ function verifySuffixNoRepetition(text, errors, pathLabel) {
 function verifyToneAndPronouns(tier, text, errors, pathLabel) {
   if (typeof text !== 'string' || text.trim() === '') return;
 
-  const isFree = (tier === "free" || tier === "random");
+  const isFree = (tier === "free" || tier === "random" || tier === "extra");
   
   if (isFree) {
     const formalWords = ["당신", "귀하", "습니다", "합니다", "하십니까", "바랍니다", "해요", "이지요.", "때문이죠."];
@@ -98,7 +98,7 @@ const stories = [
   "연인과 헤어졌는데 세상이 무너진 것 같아요. 위로가 필요해요."
 ];
 
-const tiers = ["free", "beta", "deep", "recovery", "random"];
+const tiers = ["free", "beta", "deep", "recovery", "random", "extra"];
 
 async function verifyTier(tier, story) {
   console.log(`\n--------------------------------------------`);

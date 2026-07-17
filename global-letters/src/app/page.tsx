@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { PayPalButtons } from "@paypal/react-paypal-js";
 import MonteCarloChart from "../components/MonteCarloChart";
 
-type ProductType = "random" | "free" | "beta" | "deep" | "recovery" | "gift";
+type ProductType = "random" | "free" | "beta" | "deep" | "recovery" | "gift" | "extra";
 type ViewState = "input" | "tier" | "payment" | "loading" | "full";
 
 interface LetterData {
@@ -402,6 +402,11 @@ export default function Home() {
 
   // 1:1 상담 예약 CTA용 모달
   const [showCtaModal, setShowCtaModal] = useState(false);
+  const [showLimitModal, setShowLimitModal] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [payEmail, setPayEmail] = useState("");
+  const [payPassword, setPayPassword] = useState("");
+  const [payStep, setPayStep] = useState<"login" | "pay" | "processing">("login");
   const [reserveName, setReserveName] = useState("");
   const [reserveEmail, setReserveEmail] = useState("");
   const [reservePhone, setReservePhone] = useState("");
@@ -745,6 +750,11 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ story: buildStoryPayload(), productType: type, giftRecipient, language: isKorean ? "ko" : "en" }),
       });
+      if (response.status === 429) {
+        setShowLimitModal(true);
+        setView("tier");
+        return;
+      }
       const data = await response.json();
       if (data.error) {
         alert(data.error);
@@ -2499,6 +2509,178 @@ export default function Home() {
               &copy; 2026 Master O.Y.B ALL RIGHTS RESERVED.
             </p>
           </footer>
+        )}
+
+        {/* ☕ 일일 무료 편지 한도 초과 안내 모달 */}
+        {showLimitModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 no-print animate-fade-in text-slate-800">
+            <div className="relative w-full max-w-md bg-[#FAF6F0] border border-[#E5D9C9] rounded-3xl p-8 shadow-2xl text-left">
+              <button
+                onClick={() => setShowLimitModal(false)}
+                className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 cursor-pointer transition text-lg"
+              >
+                &times;
+              </button>
+
+              <div className="text-center py-4 flex flex-col items-center gap-4">
+                <span className="text-4xl">☕</span>
+                <h4 className="font-serif text-xl font-bold text-slate-800">
+                  {isKorean ? "이미 오늘의 안부 편지를 받으셨어요" : "You've already received today's comforting letter"}
+                </h4>
+                <p className="font-serif text-xs text-slate-500 leading-relaxed px-4">
+                  {isKorean 
+                    ? "하루에 한 번만 안부를 무료로 여쭤볼 수 있습니다. 만약 지금 당장 마음을 조금 더 털어놓고 싶은가요? 커피 반 잔 값의 작은 온기를 나누고, 이야기를 한 번 더 나눠보세요."
+                    : "You can receive one daily comforting letter for free. Do you want to share a small warmth of coffee price ($0.79 USD) and talk once more right now?"}
+                </p>
+                <div className="mt-6 flex flex-col w-full gap-3">
+                  <button
+                    onClick={() => {
+                      setShowLimitModal(false);
+                      setPayStep("login");
+                      setShowPaymentModal(true);
+                    }}
+                    className="w-full px-6 py-3.5 bg-amber-500 text-slate-950 rounded-2xl font-serif text-xs font-bold tracking-wide hover:bg-amber-400 transition shadow-md cursor-pointer active:scale-95 text-center flex items-center justify-center gap-2"
+                  >
+                    <span>💛</span> {isKorean ? "PayPal로 온기 나누기 ($0.79)" : "Share Warmth via PayPal ($0.79)"}
+                  </button>
+                  <button
+                    onClick={() => setShowLimitModal(false)}
+                    className="w-full px-6 py-3.5 bg-slate-200 text-slate-700 rounded-2xl font-serif text-xs hover:bg-slate-300 transition cursor-pointer active:scale-95 text-center"
+                  >
+                    {isKorean ? "나중에 오기" : "Maybe Later"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 💛 PayPal 모의 결제 모달 (PayPal Simulator) */}
+        {showPaymentModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 no-print animate-fade-in text-slate-800">
+            <div className="relative w-full max-w-md bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-2xl text-left flex flex-col">
+              {/* PayPal Header */}
+              <div className="bg-[#003087] p-5 flex items-center justify-between text-white select-none">
+                <span className="font-serif italic font-extrabold text-xl tracking-tight text-amber-400">PayPal</span>
+                <span className="text-xs text-slate-300">$0.79 USD</span>
+              </div>
+
+              <div className="p-8 flex flex-col gap-6">
+                {payStep === "login" && (
+                  <div className="flex flex-col gap-4 font-sans">
+                    <div className="text-center mb-2">
+                      <h4 className="text-lg font-bold text-slate-800">
+                        {isKorean ? "PayPal로 결제하기" : "Pay with PayPal"}
+                      </h4>
+                      <p className="text-xs text-slate-500 mt-1">
+                        Asking the Heart - {isKorean ? "추가 안부 편지 대금" : "Additional Comfort Letter"}
+                      </p>
+                    </div>
+
+                    <div className="flex flex-col gap-3 text-xs text-slate-700">
+                      <div className="flex flex-col gap-1.5">
+                        <label className="font-semibold text-slate-600">{isKorean ? "이메일 주소" : "Email Address"}</label>
+                        <input
+                          type="email"
+                          value={payEmail}
+                          onChange={(e) => setPayEmail(e.target.value)}
+                          placeholder="example@email.com"
+                          className="w-full rounded-xl border border-slate-300 bg-white p-3 outline-none focus:border-[#0070ba]"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <label className="font-semibold text-slate-600">{isKorean ? "비밀번호" : "Password"}</label>
+                        <input
+                          type="password"
+                          value={payPassword}
+                          onChange={(e) => setPayPassword(e.target.value)}
+                          placeholder="••••••••"
+                          className="w-full rounded-xl border border-slate-300 bg-white p-3 outline-none focus:border-[#0070ba]"
+                        />
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        if (!payEmail.includes("@")) {
+                          alert(isKorean ? "올바른 이메일 형식을 입력하세요." : "Please enter a valid email.");
+                          return;
+                        }
+                        setPayStep("pay");
+                      }}
+                      className="mt-2 w-full py-3 bg-[#0070ba] hover:bg-[#005ea6] text-white rounded-2xl text-xs font-bold transition cursor-pointer active:scale-95 text-center"
+                    >
+                      {isKorean ? "로그인" : "Log In"}
+                    </button>
+
+                    <button
+                      onClick={() => setShowPaymentModal(false)}
+                      className="text-center text-xs text-slate-500 hover:text-slate-700 underline cursor-pointer"
+                    >
+                      {isKorean ? "결제 취소하고 돌아가기" : "Cancel and return to Asking the Heart"}
+                    </button>
+                  </div>
+                )}
+
+                {payStep === "pay" && (
+                  <div className="flex flex-col gap-4 font-sans">
+                    <div className="text-center mb-2">
+                      <h4 className="text-lg font-bold text-slate-800">{isKorean ? "결제 정보 확인" : "Review Payment"}</h4>
+                    </div>
+
+                    <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex flex-col gap-2 text-xs text-slate-600">
+                      <div className="flex justify-between">
+                        <span>{isKorean ? "수신처" : "Merchant"}</span>
+                        <span className="font-bold text-slate-800">Asking the Heart</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>{isKorean ? "결제 수단" : "Payment Method"}</span>
+                        <span className="font-bold text-slate-800">PayPal Balance (Visa •••• 9876)</span>
+                      </div>
+                      <div className="border-t border-slate-200 my-1"></div>
+                      <div className="flex justify-between text-slate-800 font-bold">
+                        <span>{isKorean ? "총 결제 금액" : "Total Amount"}</span>
+                        <span className="text-[#0070ba]">$0.79 USD</span>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        setPayStep("processing");
+                        setTimeout(async () => {
+                          setShowPaymentModal(false);
+                          // generateLetter("extra") 실행
+                          await generateLetter("extra");
+                        }, 1500);
+                      }}
+                      className="mt-2 w-full py-3 bg-[#0070ba] hover:bg-[#005ea6] text-white rounded-2xl text-xs font-bold transition cursor-pointer active:scale-95 text-center"
+                    >
+                      {isKorean ? "지금 결제하기 ($0.79)" : "Pay Now ($0.79)"}
+                    </button>
+
+                    <button
+                      onClick={() => setPayStep("login")}
+                      className="text-center text-xs text-slate-500 hover:text-slate-700 underline cursor-pointer"
+                    >
+                      {isKorean ? "뒤로 가기" : "Go Back"}
+                    </button>
+                  </div>
+                )}
+
+                {payStep === "processing" && (
+                  <div className="py-8 flex flex-col items-center justify-center gap-4 text-center">
+                    <div className="w-10 h-10 border-4 border-[#0070ba] border-t-transparent rounded-full animate-spin"></div>
+                    <h4 className="text-sm font-bold text-slate-700">
+                      {isKorean ? "PayPal 결제를 안전하게 처리하고 있습니다..." : "Processing your PayPal payment securely..."}
+                    </h4>
+                    <p className="text-xs text-slate-400">
+                      {isKorean ? "잠시만 기다려 주십시오. 창을 닫지 마세요." : "Please wait. Do not close this window."}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
         )}
 
       </div>
