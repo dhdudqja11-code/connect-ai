@@ -3,9 +3,9 @@ import nodemailer from "nodemailer";
 import fs from "fs";
 import path from "path";
 
-// Helper to get paths inside backend directory
+// Helper to get paths inside backend directory (or /tmp/backend on Vercel serverless)
 const getQueuePaths = () => {
-  const baseDir = path.join(process.cwd(), '..', 'backend');
+  const baseDir = process.env.VERCEL ? path.join('/tmp', 'backend') : path.join(process.cwd(), '..', 'backend');
   if (!fs.existsSync(baseDir)) {
     fs.mkdirSync(baseDir, { recursive: true });
   }

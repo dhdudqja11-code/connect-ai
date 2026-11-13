@@ -6,12 +6,12 @@ import OpenAI from "openai";
 export async function GET() {
   try {
     const envPath = path.join(process.cwd(), '.env.local');
-    const envContent = fs.readFileSync(envPath, 'utf8');
-    const apiKeyMatch = envContent.match(/OPENAI_API_KEY="(.*?)"/);
-    if (!apiKeyMatch) throw new Error("API Key not found in .env.local");
-    const openai = new OpenAI({ apiKey: apiKeyMatch[1] });
+    const envContent = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf8') : "";
+    const apiKey = process.env.OPENAI_API_KEY || envContent.match(/OPENAI_API_KEY="(.*?)"/)?.[1];
+    if (!apiKey) throw new Error("API Key not found in environment or .env.local");
+    const openai = new OpenAI({ apiKey });
 
-    const parentDir = path.join(process.cwd(), '..');
+    const parentDir = path.join(/*turbopackIgnore: true*/ process.cwd(), '..');
     const filesToUpload = [
       { name: '심리학의 총론.md', paths: ['C:\\Users\\user\\Documents\\카카오톡 받은 파일\\심리학의 총론.md', path.join(parentDir, '심리학의 총론.md')] },
       { name: '인생 방향 로드맵.md', paths: ['C:\\Users\\user\\Documents\\카카오톡 받은 파일\\인생 방향 로드맵.md', path.join(parentDir, '인생 방향 로드맵.md')] },

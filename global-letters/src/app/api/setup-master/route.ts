@@ -5,12 +5,18 @@ import OpenAI from "openai";
 
 export async function GET() {
   try {
-    const envPath = path.join(process.cwd(), '.env.local');
-    const envContent = fs.readFileSync(envPath, 'utf8');
-    const apiKeyMatch = envContent.match(/OPENAI_API_KEY="(.*?)"/);
-    if (!apiKeyMatch) throw new Error("API Key not found");
-    const openai = new OpenAI({ apiKey: apiKeyMatch[1] });
-    const assistantId = envContent.match(/OPENAI_ASSISTANT_ID="(.*?)"/)?.[1];
+    let apiKey = process.env.OPENAI_API_KEY;
+    let assistantId = process.env.OPENAI_ASSISTANT_ID;
+    if (!apiKey || !assistantId) {
+      const envPath = path.join(process.cwd(), '.env.local');
+      if (fs.existsSync(envPath)) {
+        const envContent = fs.readFileSync(envPath, 'utf8');
+        apiKey = apiKey || envContent.match(/OPENAI_API_KEY="(.*?)"/)?.[1];
+        assistantId = assistantId || envContent.match(/OPENAI_ASSISTANT_ID="(.*?)"/)?.[1];
+      }
+    }
+    if (!apiKey) throw new Error("API Key not found");
+    const openai = new OpenAI({ apiKey });
 
     if (!assistantId) throw new Error("Assistant ID not found");
 

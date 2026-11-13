@@ -21,8 +21,8 @@ try {
   isMockDb = true;
 
   const getLocalPath = (filename: string) => {
-    // Relative to parent backend workspace
-    const baseDir = path.join(process.cwd(), '..', 'backend');
+    // Relative to parent backend workspace (or /tmp/backend on Vercel serverless)
+    const baseDir = process.env.VERCEL ? path.join('/tmp', 'backend') : path.join(process.cwd(), '..', 'backend');
     if (!fs.existsSync(baseDir)) {
       fs.mkdirSync(baseDir, { recursive: true });
     }

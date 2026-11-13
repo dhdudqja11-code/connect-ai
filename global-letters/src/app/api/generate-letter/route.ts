@@ -132,12 +132,10 @@ export async function POST(req: Request) {
 
     let assistantSuccess = false;
     if (assistantId && assistantId !== "") {
+      let modePrompt = "";
       try {
         console.log(`Attempting Master Assistant for ${productType} tier...`);
       
-      const thread = await openai.beta.threads.create();
-      
-      let modePrompt = "";
       switch (productType) {
         case "random":
           modePrompt = `[MODE: RANDOM_GREETING] 사용자의 사연 없이 오늘의 안부를 생성해줘.`;
@@ -197,6 +195,8 @@ You must write the letter following the unique style of Master Oh Young-bum:
 [FEW-SHOT TONE EXAMPLES (KOREAN - PAID TIER - HONORIFIC TONE)]:
 - 번아웃 (너무 오래 버틴 마음): "참 많이 애쓰셨어요. 괜찮다고 스스로 다독이면서도 마음속에서는 더 이상 버틸 수 없는 날들이 참 많았을 것 같아요. 해야 할 일은 계속 쌓이고 기대하는 시선들은 많은데, 정작 내 마음을 편히 내려놓을 곳은 없으셨지요. 이제는 그 무거운 짐을 잠시 내려놓고 가만히 쉬어 가셔도 좋아요."
 - 불안/무기력 (괜찮은 척하느라 지친 마음): "아무렇지 않은 척 말하는 것이 익숙한 습관이 되었을지도 모르겠어요. 누가 물어보아도 괜찮다고, 별일 아니라고 미소 지어 넘겼을 테지요. 하지만 당신의 깊은 내면은 아주 오래전부터 무겁게 지쳐 있었을 거예요."`;
+
+      const thread = await openai.beta.threads.create();
 
       await openai.beta.threads.messages.create(thread.id, {
         role: "user",
