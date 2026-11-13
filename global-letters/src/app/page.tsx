@@ -720,7 +720,7 @@ export default function Home() {
   };
 
   const handleDrawGreeting = async () => {
-    if (drawCount >= 99999) {
+    if (drawCount >= 3) {
       alert(t.alertDrawLimit);
       return;
     }
@@ -1301,12 +1301,15 @@ export default function Home() {
                   />
                 </div>
 
-                <button
-                  onClick={() => generateLetter(selectedProduct.id as ProductType)}
-                  className="mt-6 w-full py-3 bg-slate-50 border border-slate-100 text-slate-500 rounded-xl text-xs font-sans hover:bg-slate-100 transition-colors active:scale-95 cursor-pointer font-medium"
-                >
-                  {t.testPaymentBypass}
-                </button>
+                {/* 🛡️ 상용 운영 환경 보안: 일반 고객에게 결제 우회 버튼 노출 차단 (개발 모드 전용) */}
+                {process.env.NODE_ENV === "development" && (
+                  <button
+                    onClick={() => generateLetter(selectedProduct.id as ProductType)}
+                    className="mt-6 w-full py-3 bg-slate-50 border border-slate-100 text-slate-500 rounded-xl text-xs font-sans hover:bg-slate-100 transition-colors active:scale-95 cursor-pointer font-medium"
+                  >
+                    {t.testPaymentBypass}
+                  </button>
+                )}
                 
                 <button
                   onClick={() => setView("tier")}

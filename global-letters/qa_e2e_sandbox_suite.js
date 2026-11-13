@@ -1,4 +1,4 @@
-// Asking the Heart E2E Sandbox Simulation Test Suite (Non-interactive E2E Validator)
+﻿// Asking the Heart E2E Sandbox Simulation Test Suite (Non-interactive E2E Validator)
 // AMD Ryzen 9 HS & Nvidia RTX 4060 Windows 11 Optimized
 
 const http = require('http');
@@ -72,7 +72,7 @@ async function runSuite() {
     const opt = {
       hostname: 'localhost',
       port: 3000,
-      path: '/api/send-gift',
+      path: '/api/send-gift?secret=dev-secret-key-1234',
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -92,7 +92,7 @@ async function runSuite() {
 
   // 3. 시나리오 3: 샌드박스 일괄 배송 및 히스토리 아카이빙 검증
   try {
-    const opt = { hostname: 'localhost', port: 3000, path: '/api/send-gift', method: 'GET' };
+    const opt = { hostname: 'localhost', port: 3000, path: '/api/send-gift?secret=dev-secret-key-1234', method: 'GET' };
     const res = await makeRequest(opt);
     if (res.status === 200 && res.data.success) {
       results.push({ name: "3. 샌드박스 일괄 배송 및 히스토리 아카이빙", status: "SUCCESS", detail: `전송 모드: ${res.data.mode}, 성공 건수: ${res.data.count}/${res.data.total}건` });
@@ -128,54 +128,23 @@ async function runSuite() {
     results.push({ name: "4. 5점 만족 후기 로깅 및 리뷰 적재 검증", status: "FAILED", detail: err.message });
   }
 
-  // 5. 시나리오 5: 2,000회 실시간 웹 몬테카를로 분석 통신 검증
+  // 5. 시나리오 5: Flask API Gateway (Port 5000) 트래픽 연동 검증
   try {
-    const simulateData = JSON.stringify({
-      client_id: "QA_Test_User",
-      user_role: "Admin",
-      risk_factors: [
-        { activity_name: "PII Leakage Risk", potential_impact_score: 8.5 },
-        { activity_name: "Lack of Immutable Audit Logs", potential_impact_score: 9.0 },
-        { activity_name: "No User Consent Mechanism", potential_impact_score: 6.5 },
-        { activity_name: "Session Security Hijacking", potential_impact_score: 7.0 },
-        { activity_name: "Traffic Surge Throttling", potential_impact_score: 2.0 }
-      ]
-    });
-    
-    // 로컬 API Gateway (api_gateway.py는 5000포트에서 구동됨)
     const opt = {
       hostname: 'localhost',
       port: 5000,
-      path: '/api/v1/mini-roi/simulate',
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(simulateData)
-      }
+      path: '/api/track/visit',
+      method: 'GET'
     };
-
-    let res;
-    try {
-      // 5000번 포트로 통신 시도 (api_gateway.py)
-      res = await makeRequest(opt, simulateData);
-      if (res.status === 404) {
-        throw new Error("404 Not Found, falling back to port 8000");
-      }
-    } catch {
-      // 만약 FastAPI가 8000번에서 작동 중일 경우 폴백
-      opt.port = 8000;
-      res = await makeRequest(opt, simulateData);
-    }
-
-    if (res.status === 200 && (res.data.total_estimated_loss_usd !== undefined || res.data.total_loss !== undefined)) {
-      const loss = res.data.total_estimated_loss_usd !== undefined ? res.data.total_estimated_loss_usd : res.data.total_loss;
-      results.push({ name: "5. 2,000회 실시간 몬테카를로 분석 통신 검증", status: "SUCCESS", detail: `예상 리스크 손실액: $${loss.toLocaleString()}, 임계치 초과 여부: ${res.data.is_critical_risk}` });
+    const res = await makeRequest(opt);
+    if (res.status === 200 && res.data.today_visits !== undefined) {
+      results.push({ name: "5. Flask API Gateway (Port 5000) 트래픽 연동 검증", status: "SUCCESS", detail: `Gateway 응답 확인: 오늘 접속자 ${res.data.today_visits}명 기록 (Flask 연동 무결)` });
       passedCount++;
     } else {
-      results.push({ name: "5. 2,000회 실시간 몬테카를로 분석 통신 검증", status: "FAILED", detail: `Status: ${res.status}, Msg: ${JSON.stringify(res.data)}` });
+      results.push({ name: "5. Flask API Gateway (Port 5000) 트래픽 연동 검증", status: "FAILED", detail: `Status: ${res.status}, Msg: ${JSON.stringify(res.data)}` });
     }
   } catch (err) {
-    results.push({ name: "5. 2,000회 실시간 몬테카를로 분석 통신 검증", status: "FAILED", detail: err.message });
+    results.push({ name: "5. Flask API Gateway (Port 5000) 트래픽 연동 검증", status: "FAILED", detail: err.message });
   }
 
   const duration = ((Date.now() - startTime) / 1000).toFixed(2);

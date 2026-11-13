@@ -87,10 +87,53 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Story is required" }, { status: 400 });
     }
 
+    // ⚡ [Fast Track] 오늘의 문장(random)은 100% 무중단 0.1초 즉시 처방
+    if (productType === "random") {
+      const isKo = language === "ko";
+      const quotesKo = [
+        "눈물을 흘리는 건 나약함이 아니야. 마음의 응어리를 내보내는 거야. 너의 삶이 멈춰서 정체된 것이 아니라, 많은 것들을 아름답게 만들어갔으면 좋겠어.",
+        "울고 싶다면 울어도 돼. 그만큼 너는 버텨왔잖아. 무너진 마음에 따라 일상이 흔들려도, 그럼에도 오늘을 살아낸 네가 참 자랑스러워.",
+        "네 시선이 향하는 곳에 너를 다정하게 안아주는 것들이 많아졌으면 좋겠다. 단단하고 잔잔한 다정함들이 너를 가득 감싸주었으면 해.",
+        "매번 흔들리면서도 너는 버텨왔고, 무너질 듯할 때마다 지켜왔어. 비바람을 견뎌낸 꽃처럼 끈질긴 마음으로 그렇게 살아온 너는 결코 약하지 않아.",
+        "가끔 손에 잡히지 않을 만큼 불안할 때가 많지. 하지만 행복을 알기에 불안한 감정들이 있음을 네 마음이 알아줬으면 해. 찰나의 어둠에 너무 두려워 말아.",
+        "강해 보여도 강하지 않은 사람. 참 여린 네 마음이 이제 그만 아파했으면 좋겠다. 우리, 이제 그만 행복해져도 되니까.",
+        "1월에 피는 꽃들처럼 포기하지 말아. 네가 너를 꺾지 않는다면, 그 겨울 속에서도 너만의 꽃이 봉오리를 틔울 거야. 그러니 지지 말아.",
+        "말하지 않았기에 담아두었던 마음, 길을 걷다 터지는 눈물을 가리기 위해 눈을 감았던 지난 삶이, 참 고생이 많았구나. 정말 많이 애썼어.",
+        "작고 섬세한 다정은 사랑으로 시작돼요. 당신은 아무리 힘겨운 상황에서도 다정한 마음으로 능히 나아갈 수 있을 겁니다.",
+        "마음대로 안 되는 것들이 많아질 때마다, 괜스레 더 나아갈 수 없어서 무너진 너의 마음에 필요한 건 다독임일 거야. 참 잘 애써왔어."
+      ];
+      const quotesEn = [
+        "Crying is not a sign of weakness. It is letting out the knot in your heart. You are not stuck; you are gently blooming.",
+        "You can cry all you want. You have endured that much. Even if your daily life shakes, I am so proud of you for living through today.",
+        "I hope wherever your eyes gaze, things that embrace you with warmth multiply. May gentle kindness wrap around your tired soul.",
+        "Like a wildflower withstanding harsh rain and wind, you have protected your heart through every storm. You are not weak at all.",
+        "It is natural to feel anxious because your heart remembers happiness. Do not let fleeting darkness rob your peace.",
+        "Even when strong on the outside, your tender heart has carried so much in silence. You deserve to be at peace now.",
+        "Never give up on yourself. Even in the deepest winter, your own flower is quietly preparing to bloom. Do not lose hope."
+      ];
+      const list = isKo ? quotesKo : quotesEn;
+      const selected = list[Math.floor(Math.random() * list.length)];
+      
+      const resData = {
+        cover: {
+          title: isKo ? "오늘의 문장 처방전" : "Today's Prescription",
+          heart_name: isKo ? "위로가 필요한 너에게" : "To You in Need of Comfort"
+        },
+        page_letter_paragraphs: [selected],
+        page_sentences: [],
+        page_questions: [],
+        page_action: isKo ? "잠시 눈을 감고, 오늘 하루 애쓴 내 어깨를 토닥여주기." : "Gently close your eyes and pat your shoulder with compassion.",
+        recovery_days: []
+      };
+      return NextResponse.json(resData);
+    }
+
     const assistantId = process.env.OPENAI_ASSISTANT_ID;
 
+    let assistantSuccess = false;
     if (assistantId && assistantId !== "") {
-      console.log(`Using Master Assistant for ${productType} tier...`);
+      try {
+        console.log(`Attempting Master Assistant for ${productType} tier...`);
       
       const thread = await openai.beta.threads.create();
       
@@ -160,9 +203,34 @@ You must write the letter following the unique style of Master Oh Young-bum:
         content: modePrompt,
       });
 
-      let run = await openai.beta.threads.runs.createAndPoll(thread.id, {
-        assistant_id: assistantId,
-      });
+      let run: any = null;
+      try {
+        run = await openai.beta.threads.runs.createAndPoll(thread.id, {
+          assistant_id: assistantId,
+        });
+      } catch (runErr: any) {
+        console.warn("[Assistant Fallback] Assistant run failed (e.g. 404), falling back to Chat Completion (gpt-4o):", runErr?.message);
+        const completion = await openai.chat.completions.create({
+          model: "gpt-4o",
+          messages: [
+            {
+              role: "system",
+              content: "You are Master Oh Young-bum, an empathetic writer and counseling master. Return ONLY a valid JSON object matching the requested schema without markdown code blocks."
+            },
+            {
+              role: "user",
+              content: modePrompt
+            }
+          ],
+          temperature: 0.7,
+          response_format: { type: "json_object" }
+        });
+        const chatContent = completion.choices[0].message.content || "{}";
+        const parsedResponse = JSON.parse(chatContent);
+        applyPostProcessFilters(parsedResponse, productType);
+        assistantSuccess = true;
+          return NextResponse.json(parsedResponse);
+      }
 
       if (run.status === 'completed') {
         const messages = await openai.beta.threads.messages.list(run.thread_id);
@@ -352,6 +420,31 @@ You must write the letter following the unique style of Master Oh Young-bum:
           applyPostProcessFilters(parsedResponse, productType);
 
           return NextResponse.json(parsedResponse);
+        }
+      }
+      } catch (asstError: any) {
+        console.warn("[Assistant Error Handled] Falling back to GPT-4o Chat Completion directly:", asstError?.message);
+        try {
+          const chatRes = await openai.chat.completions.create({
+            model: "gpt-4o",
+            messages: [
+              {
+                role: "system",
+                content: "You are Master Oh Young-bum (오영범 마스터), an empathetic healing writer and counseling master. Return ONLY a valid JSON object matching the requested schema without markdown code blocks."
+              },
+              {
+                role: "user",
+                content: modePrompt
+              }
+            ],
+            temperature: 0.7,
+            response_format: { type: "json_object" }
+          });
+          const chatJson = JSON.parse(chatRes.choices[0].message.content || "{}");
+          applyPostProcessFilters(chatJson, productType);
+          return NextResponse.json(chatJson);
+        } catch (chatError: any) {
+          console.warn("[GPT-4o Fallback Error] Proceeding to High-Fidelity Local Fallback:", chatError?.message);
         }
       }
     }
