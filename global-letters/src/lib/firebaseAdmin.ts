@@ -1,27 +1,47 @@
 import * as admin from 'firebase-admin';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 
 let db: any;
 let isMockDb = false;
 
 try {
+  const projectId = (process.env.GCLOUD_PROJECT || 'ask-one-s-heart').trim();
+  process.env.GCLOUD_PROJECT = projectId;
+
+  if (process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON && !process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+    const tmpDir = process.env.VERCEL ? '/tmp' : os.tmpdir();
+    const adcPath = path.join(tmpDir, 'gcp_adc_credentials.json');
+    fs.writeFileSync(adcPath, process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON.trim(), { encoding: 'utf8', mode: 0o600 });
+    process.env.GOOGLE_APPLICATION_CREDENTIALS = adcPath;
+  } else if (!process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+    const localFirebaseAdc = path.join(
+      process.env.APPDATA || '',
+      'firebase',
+      'dhdudqja11_gmail_com_application_default_credentials.json'
+    );
+    if (localFirebaseAdc && fs.existsSync(localFirebaseAdc)) {
+      process.env.GOOGLE_APPLICATION_CREDENTIALS = localFirebaseAdc;
+    }
+  }
+
+  if (!process.env.GOOGLE_APPLICATION_CREDENTIALS && !process.env.FIREBASE_CONFIG) {
+    throw new Error('Missing Google Cloud environment project credentials.');
+  }
+
   if (!admin.apps.length) {
     admin.initializeApp({
-      credential: admin.credential.applicationDefault()
+      credential: admin.credential.applicationDefault(),
+      projectId,
     });
   }
   db = admin.firestore();
-  // Validate if firestore is truly reachable (throws if projectId is missing)
-  if (!process.env.GOOGLE_APPLICATION_CREDENTIALS && !process.env.FIREBASE_CONFIG && !process.env.GCLOUD_PROJECT) {
-    throw new Error("Missing Google Cloud environment project credentials.");
-  }
 } catch (error) {
-  console.warn('⚠️ Firebase Admin failed to initialize. Activating high-fidelity local JSON database fallback:', error);
+  console.warn('⚠️ Firebase Admin failed to initialize. Activating local JSON database fallback:', error);
   isMockDb = true;
 
   const getLocalPath = (filename: string) => {
-    // Relative to parent backend workspace (or /tmp/backend on Vercel serverless)
     const baseDir = process.env.VERCEL ? path.join('/tmp', 'backend') : path.join(process.cwd(), '..', 'backend');
     if (!fs.existsSync(baseDir)) {
       fs.mkdirSync(baseDir, { recursive: true });
@@ -29,11 +49,10 @@ try {
     return path.join(baseDir, filename);
   };
 
-  // Mock Firestore implementation with high compatibility
   db = {
     collection: (colName: string) => {
       const filePath = getLocalPath(`${colName}.json`);
-      
+
       const readData = () => {
         if (!fs.existsSync(filePath)) return [];
         try {
@@ -47,7 +66,7 @@ try {
         try {
           fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
         } catch (e) {
-          console.error("Local DB write error:", e);
+          console.error('Local DB write error:', e);
         }
       };
 
@@ -59,7 +78,7 @@ try {
               const found = data.find((item: any) => item.id === docId);
               return {
                 exists: !!found,
-                data: () => found ? found.data : null
+                data: () => (found ? found.data : null),
               };
             },
             set: async (docData: any) => {
@@ -83,7 +102,12 @@ try {
               }
               writeData(data);
               return { success: true };
-            }
+            },
+            delete: async () => {
+              const data = readData().filter((item: any) => item.id !== docId);
+              writeData(data);
+              return { success: true };
+            },
           };
         },
         add: async (docData: any) => {
@@ -92,7 +116,7 @@ try {
           data.push(newDoc);
           writeData(data);
           return { id: newDoc.id };
-        }
+        },
       };
     },
     runTransaction: async (updateFunction: (transaction: any) => Promise<any>) => {
@@ -105,10 +129,10 @@ try {
         },
         update: async (docRef: any, data: any) => {
           return await docRef.update(data);
-        }
+        },
       };
       return await updateFunction(transactionMock);
-    }
+    },
   };
 }
 

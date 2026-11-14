@@ -92,13 +92,13 @@ export async function POST(req: Request) {
       return NextResponse.json(resData);
     }
 
-    const assistantId = process.env.OPENAI_ASSISTANT_ID?.trim();
+    const apiKeyPresent = !!(process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.trim() !== "" && process.env.OPENAI_API_KEY.trim() !== "dummy-key-for-build");
+    const vectorStoreId = (process.env.OPENAI_VECTOR_STORE_ID || "vs_6ad3fb4845a48191a22097f945c3ac25").trim();
 
-    let assistantSuccess = false;
-    if (assistantId && assistantId !== "") {
+    if (apiKeyPresent) {
       let modePrompt = "";
       try {
-        console.log(`Attempting Master Assistant for ${productType} tier...`);
+        console.log(`Generating Master Prescription via OpenAI Responses API (Vector Store: ${vectorStoreId}) for ${productType} tier...`);
       
       switch (productType) {
         case "random":
@@ -171,26 +171,25 @@ Return ONLY a valid JSON object with the exact following keys:
   "recovery_days": []
 }`;
 
-      const thread = await openai.beta.threads.create();
-
-      await openai.beta.threads.messages.create(thread.id, {
-        role: "user",
-        content: modePrompt,
-      });
-
-      let run: any = null;
+      let rawText = "";
       try {
-        run = await openai.beta.threads.runs.createAndPoll(thread.id, {
-          assistant_id: assistantId,
+        const response = await openai.responses.create({
+          model: "gpt-4o",
+          instructions: "You are Master Oh Young-bum (오영범 마스터), an empathetic healing writer and counseling master. Search the attached Master Sentence Prescription Knowledge Base (본 계정 글.txt, 심리학의 총론.md, 문장 처방전 00~04.md) to match Master Oh Young-bum's exact poetic voice and psychological depth. Return ONLY a valid JSON object matching the requested schema without markdown code blocks.",
+          input: modePrompt,
+          tools: vectorStoreId ? [{ type: "file_search", vector_store_ids: [vectorStoreId] }] : [],
+          text: { format: { type: "json_object" } },
+          temperature: 0.7,
         });
-      } catch (runErr: any) {
-        console.warn("[Assistant Fallback] Assistant run failed (e.g. 404), falling back to Chat Completion (gpt-4o):", runErr?.message);
+        rawText = response.output_text || "";
+      } catch (responsesErr: any) {
+        console.warn("[Responses API Fallback] Falling back to Chat Completion (gpt-4o):", responsesErr?.message);
         const completion = await openai.chat.completions.create({
           model: "gpt-4o",
           messages: [
             {
               role: "system",
-              content: "You are Master Oh Young-bum, an empathetic writer and counseling master. Return ONLY a valid JSON object matching the requested schema without markdown code blocks."
+              content: "You are Master Oh Young-bum (오영범 마스터), an empathetic writer and counseling master. Return ONLY a valid JSON object matching the requested schema without markdown code blocks."
             },
             {
               role: "user",
@@ -200,28 +199,11 @@ Return ONLY a valid JSON object with the exact following keys:
           temperature: 0.7,
           response_format: { type: "json_object" }
         });
-        const chatContent = completion.choices[0].message.content || "{}";
-        const parsedResponse = JSON.parse(chatContent);
-        parsedResponse.scientific_reference = {
-          title: scientificPrescription.title,
-          authors: scientificPrescription.authors,
-          source_url: scientificPrescription.source_url,
-          insight_ko: scientificPrescription.insight_ko
-        };
-        parsedResponse.emotions = emotionProfile.emotions;
-        parsedResponse.defense_mechanism = emotionProfile.defense_mechanism;
-        parsedResponse.core_pain_point = emotionProfile.core_pain_point;
-        applyPostProcessFilters(parsedResponse, productType);
-        assistantSuccess = true;
-        return NextResponse.json(parsedResponse);
+        rawText = completion.choices[0]?.message?.content || "";
       }
 
-      if (run.status === 'completed') {
-        const messages = await openai.beta.threads.messages.list(run.thread_id);
-        const lastMessage = messages.data.filter(m => m.role === 'assistant')[0];
-        
-        if (lastMessage && lastMessage.content[0].type === 'text') {
-          const rawText = lastMessage.content[0].text.value;
+      if (rawText && rawText.trim() !== "") {
+        {
           const cleanText = rawText.replace(/```json/g, "").replace(/```/g, "").trim();
           const parsedResponse = JSON.parse(cleanText);
           
