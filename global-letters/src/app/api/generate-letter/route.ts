@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
-import { execSync } from "child_process";
-import path from "path";
+import { queryKnowledge, profileEmpathy } from "@/lib/psychologyEngine";
 
 // OpenAI client initialization
 const openai = new OpenAI({
@@ -17,46 +16,11 @@ export async function POST(req: Request) {
   try {
     const { story, productType, giftRecipient, language = "ko" } = await req.json();
 
-    // 🧠 글로벌 뇌과학/심리학 RAG 지식 피더 쿼리 (Python Bridge)
-    let scientificPrescription = {
-      title: "Neural Correlates of Resilience and Coping Mechanisms in Stressful Environments",
-      authors: "Dr. Sarah Jenkins et al.",
-      source_url: "https://europepmc.org/article/MED/109849",
-      insight_ko: "스트레스 상황에서 뇌의 전두엽 활성화는 감정 조절과 인지적 재구성을 도와 상처를 스스로 복구하게 합니다."
-    };
+    // 🧠 글로벌 뇌과학/심리학 RAG 지식 피더 쿼리 (Node.js Native Engine - Vercel Serverless 호환)
+    const scientificPrescription = queryKnowledge(story || "안부 편지");
 
-    try {
-      const sanitizedStory = (story || "안부 편지").replace(/"/g, '\\"').replace(/\n/g, " ");
-      const scouterScript = path.join(process.cwd(), "..", "scripts", "query_knowledge.py");
-      // execSync로 파이썬 브릿지 기동 및 인코딩 가드
-      const stdout = execSync(`python "${scouterScript}" "${sanitizedStory}"`, { encoding: "utf-8" });
-      const parsed = JSON.parse(stdout.trim());
-      if (parsed && parsed.title) {
-        scientificPrescription = parsed;
-      }
-    } catch (scouterErr) {
-      console.error("⚠️ Failed to query global knowledge from python scouter bridge:", scouterErr);
-    }
-
-    // 🧠 공감 프로파일러 심리 분석 쿼리 (Python Empathy Profiler Agent)
-    let emotionProfile = {
-      emotions: { anxiety: 0.40, helplessness: 0.30, self_blame: 0.30, sadness: 0.40, loneliness: 0.30 },
-      defense_mechanism: "내면화 및 억제",
-      core_pain_point: "잠재적인 감정적 스트레스가 누적된 상태",
-      prescription_guideline: "사연자의 감정을 따뜻하게 수용하고, 섣부른 조언 대신 절대적 지지를 제공하십시오."
-    };
-
-    try {
-      const sanitizedStory = (story || "안부 편지").replace(/"/g, '\\"').replace(/\n/g, " ");
-      const profilerScript = path.join(process.cwd(), "..", "_company", "_agents", "empathy_profiler.py");
-      const stdout = execSync(`python "${profilerScript}" "${sanitizedStory}"`, { encoding: "utf-8" });
-      const parsed = JSON.parse(stdout.trim());
-      if (parsed && parsed.emotions) {
-        emotionProfile = parsed;
-      }
-    } catch (profilerErr) {
-      console.error("⚠️ Failed to profile empathy distress metrics:", profilerErr);
-    }
+    // 🧠 공감 프로파일러 심리 분석 쿼리 (Node.js Native Empathy Profiler Agent - Vercel Serverless 호환)
+    const emotionProfile = await profileEmpathy(story || "안부 편지", openai);
 
     // 1. Get user IP for rate limiting
     const forwardedFor = req.headers.get("x-forwarded-for");
@@ -238,9 +202,18 @@ Return ONLY a valid JSON object with the exact following keys:
         });
         const chatContent = completion.choices[0].message.content || "{}";
         const parsedResponse = JSON.parse(chatContent);
+        parsedResponse.scientific_reference = {
+          title: scientificPrescription.title,
+          authors: scientificPrescription.authors,
+          source_url: scientificPrescription.source_url,
+          insight_ko: scientificPrescription.insight_ko
+        };
+        parsedResponse.emotions = emotionProfile.emotions;
+        parsedResponse.defense_mechanism = emotionProfile.defense_mechanism;
+        parsedResponse.core_pain_point = emotionProfile.core_pain_point;
         applyPostProcessFilters(parsedResponse, productType);
         assistantSuccess = true;
-          return NextResponse.json(parsedResponse);
+        return NextResponse.json(parsedResponse);
       }
 
       if (run.status === 'completed') {
@@ -452,6 +425,15 @@ Return ONLY a valid JSON object with the exact following keys:
             response_format: { type: "json_object" }
           });
           const chatJson = JSON.parse(chatRes.choices[0].message.content || "{}");
+          chatJson.scientific_reference = {
+            title: scientificPrescription.title,
+            authors: scientificPrescription.authors,
+            source_url: scientificPrescription.source_url,
+            insight_ko: scientificPrescription.insight_ko
+          };
+          chatJson.emotions = emotionProfile.emotions;
+          chatJson.defense_mechanism = emotionProfile.defense_mechanism;
+          chatJson.core_pain_point = emotionProfile.core_pain_point;
           applyPostProcessFilters(chatJson, productType);
           return NextResponse.json(chatJson);
         } catch (chatError: any) {
